@@ -1,0 +1,86 @@
+const int trig1 = 9;
+const int echo1 = 10;
+const int trig2 = 6;
+const int echo2 = 7;
+const int buzzerPin = 8;
+
+const int beepLength = 50;       // each beep lasts 50 ms
+const int minGap = 50;           // gap when obstacle is very close (ms)
+const int maxGap = 600;          // gap when obstacle is far (ms)
+const float maxRange = 300.0;    // ignore anything beyond 3 m (cm)
+const int pingSpacing = 40;      // time between sensor pings (ms)
+
+float dist1 = -1;                // latest distance of sensor 1 (cm)
+float dist2 = -1;                // latest distance of sensor 2 (cm)
+int whichSensor = 1;             // whose turn it is to ping
+bool buzzerOn = false;
+unsigned long lastPing = 0;
+unsigned long lastChange = 0;
+
+void setup() {
+  pinMode(trig1, OUTPUT);
+  pinMode(echo1, INPUT);
+  pinMode(trig2, OUTPUT);
+  pinMode(echo2, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+float getDistanceCm(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);  // 30 ms timeout
+  if (duration == 0) return -1;                   // no echo
+  return duration * 0.0343 / 2;                   // convert to cm
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // 1. Ping one sensor at a time, taking turns
+  if (now - lastPing >= pingSpacing) {
+    lastPing = now;
+
+    if (whichSensor == 1) {
+      dist1 = getDistanceCm(trig1, echo1);
+      whichSensor = 2;
+    } else {
+      dist2 = getDistanceCm(trig2, echo2);
+      whichSensor = 1;
+    }
+
+    Serial.print("S1: ");
+    Serial.print(dist1);
+    Serial.print(" cm   S2: ");
+    Serial.print(dist2);
+    Serial.println(" cm");
+  }
+
+  // 2. Find the nearest valid obstacle
+  float nearest = -1;
+  if (dist1 > 0) nearest = dist1;
+  if (dist2 > 0 && (nearest < 0 || dist2 < nearest)) nearest = dist2;
+
+  // 3. Beep logic (closer = faster beeps)
+  if (nearest > 0 && nearest < maxRange) {
+    int gap = map((int)nearest, 20, (int)maxRange, minGap, maxGap);
+    gap = constrain(gap, minGap, maxGap);
+
+    if (buzzerOn && now - lastChange >= beepLength) {
+      digitalWrite(buzzerPin, LOW);
+      buzzerOn = false;
+      lastChange = now;
+    } else if (!buzzerOn && now - lastChange >= gap) {
+      digitalWrite(buzzerPin, HIGH);
+      buzzerOn = true;
+      lastChange = now;
+    }
+  } else {
+    digitalWrite(buzzerPin, LOW);   // nothing nearby: silent
+    buzzerOn = false;
+  }
+}
