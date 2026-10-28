@@ -1,0 +1,79 @@
+const int trigPin = 9;
+const int echoPin = 10;
+
+void setup() {
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Send a 10 µs trigger pulse
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Measure how long the echo pulse stays HIGH (timeout 30 ms ≈ 5 m)
+  long duration = pulseIn(echoPin, HIGH, 30000);
+
+  if (duration == 0) {
+    Serial.println("No object detected");
+  } else {
+    float distance = duration * 0.0343 / 2;  // in cm
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+  }
+
+  delay(100);
+}
+
+Open the Serial Monitor (Tools → Serial Monitor) and set it to 9600 baud to see the readings.
+
+How it works: the sensor sends out an ultrasonic pulse, and the ECHO pin stays HIGH for as long as the sound takes to travel to the object and back. Sound travels about 0.0343 cm per microsecond, and we divide by 2 because the time covers the round trip.
+
+Next step for Phase 1: you can combine this with the buzzer from before so the beeps get faster as the distance shrinks. Here’s the complete version, with the buzzer on Pin 8:
+
+cpp
+const int trigPin = 9;
+const int echoPin = 10;
+const int buzzerPin = 8;
+
+void setup() {
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+float getDistanceCm() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return -1;      // nothing detected
+  return duration * 0.0343 / 2;
+}
+
+void loop() {
+  float d = getDistanceCm();
+  Serial.println(d);
+
+  if (d > 0 && d < 300) {            // obstacle within 3 m
+    int gap = map((int)d, 20, 300, 50, 600);  // closer = shorter gap
+    gap = constrain(gap, 50, 600);
+
+    digitalWrite(buzzerPin, HIGH);
+    delay(50);
+    digitalWrite(buzzerPin, LOW);
+    delay(gap);
+  } else {
+    digitalWrite(buzzerPin, LOW);
+    delay(100);
+  }
+}
