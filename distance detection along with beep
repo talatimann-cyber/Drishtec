@@ -1,0 +1,63 @@
+const int trigPin   = 9;
+const int echoPin   = 10;
+const int buzzerPin = 8;
+
+const int beepLength = 50;        // each beep lasts 50 ms
+const int minGap = 50;            // gap when obstacle is very close (ms)
+const int maxGap = 600;           // gap when obstacle is far (ms)
+const float maxRange = 300.0;     // ignore anything beyond 3 m (cm)
+
+float distance = -1;              // latest distance in cm (-1 = nothing found)
+bool buzzerOn = false;
+unsigned long lastPing = 0;       // time of last distance measurement
+unsigned long lastChange = 0;     // time the buzzer last switched ON/OFF
+
+void setup() {
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+float getDistanceCm() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);  // 30 ms timeout
+  if (duration == 0) return -1;                   // no echo
+  return duration * 0.0343 / 2;                   // convert to cm
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // 1. Measure distance every 60 ms
+  if (now - lastPing >= 60) {
+    lastPing = now;
+    distance = getDistanceCm();
+    Serial.println(distance);
+  }
+
+  // 2. Beep logic
+  if (distance > 0 && distance < maxRange) {
+    // closer obstacle = shorter gap between beeps
+    int gap = map((int)distance, 20, (int)maxRange, minGap, maxGap);
+    gap = constrain(gap, minGap, maxGap);
+
+    if (buzzerOn && now - lastChange >= beepLength) {
+      digitalWrite(buzzerPin, LOW);     // end the beep
+      buzzerOn = false;
+      lastChange = now;
+    } else if (!buzzerOn && now - lastChange >= gap) {
+      digitalWrite(buzzerPin, HIGH);    // start a beep
+      buzzerOn = true;
+      lastChange = now;
+    }
+  } else {
+    digitalWrite(buzzerPin, LOW);       // nothing nearby: stay silent
+    buzzerOn = false;
+  }
+}
